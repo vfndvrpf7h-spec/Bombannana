@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Banana Panic Online</title>
+<style>
+:root{--bg:#fff7d6;--card:#fff;--ink:#2b2200;--mut:#7a6a2a;--acc:#f5c400;--bad:#d63b2f}
+@media (prefers-color-scheme:dark){:root{--bg:#1d1900;--card:#2b2500;--ink:#fff3b0;--mut:#c9b64f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,sans-serif;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
+h1{text-align:center;font-size:32px;margin:8px 0}.card{background:var(--card);border-radius:16px;padding:12px;margin:10px 0}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:12px 14px;margin:4px;background:var(--acc);color:#2b2200;min-height:48px}
+button.s{background:var(--card);color:var(--ink);border:2px solid var(--acc)}
+input{font:inherit;padding:12px;border-radius:12px;border:2px solid var(--acc);width:100%;margin:4px 0;background:var(--card);color:var(--ink);text-transform:uppercase}
+.row{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}.mut{color:var(--mut);font-size:14px}.big{font-size:52px;text-align:center}
+.wire{height:14px;border-radius:7px;margin:6px 0}.led{display:inline-block;width:34px;height:34px;border-radius:50%;margin:4px;border:3px solid var(--ink)}
+.hud{display:flex;justify-content:space-between;font-weight:800}
+</style></head><body><div id="a"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const URL_='https://vkfpgtfivijyetimhrxq.supabase.co',KEY='sb_publishable_1K_kkMCuKQdN5603AOslCw_i1eZ-Z5c';
+const sb=supabase.createClient(URL_,KEY);
+const E={blind:'🙈',silent:'🙊',deaf:'🙉'},N={blind:'Blind Banana',silent:'Silent Banana',deaf:'Deaf Banana'};
+const C={rot:'#d63b2f',blau:'#2b6ed6',gelb:'#f5c400','weiß':'#eee'};
+let code=null,v=null,ch=null,err='',name='Affe';
+const $=s=>document.getElementById(s);
+async function rpc(f,a){const{data,error}=await sb.rpc(f,a);if(error){err=error.message;draw();throw error}err='';return data}
+async function boot(){const{data}=await sb.auth.getSession();if(!data.session){const r=await sb.auth.signInAnonymously();if(r.error){err=r.error.message}}
+ try{code=localStorage.bpc||null}catch(e){}if(code){try{await rpc('join_room',{p_code:code,p_name:name});sub()}catch(e){code=null}}draw()}
+async function mk(){name=$('n').value||'Affe';const r=await rpc('create_room',{p_name:name});code=r.code;sub()}
+async function jn(){name=$('n').value||'Affe';const c=$('c').value.trim().toUpperCase();const r=await rpc('join_room',{p_code:c,p_name:name});code=r.code;sub()}
+async function leave(){try{await rpc('leave_room',{p_code:code})}catch(e){}code=null;v=null;try{delete localStorage.bpc}catch(e){}if(ch)sb.removeChannel(ch);draw()}
+function sub(){try{localStorage.bpc=code}catch(e){}if(ch)sb.removeChannel(ch);
+ ch=sb.channel('r'+code).on('postgres_changes',{event:'UPDATE',schema:'public',table:'rooms',filter:'code=eq.'+code},ref).subscribe();ref()}
+async function ref(){if(!code)return;try{v=await rpc('get_view',{p_code:code})}catch(e){}draw()}
+setInterval(()=>{if(code)ref()},4000);setInterval(()=>{if(v&&v.state=='playing')tick()},1000);
+const act=(a,i)=>rpc('act',{p_code:code,p_action:a,p_arg:i??0}).then(ref);
+const say=t=>rpc('send_msg',{p_code:code,p_txt:t}).then(ref);
+const start=()=>rpc('start_game',{p_code:code}).then(ref);
+function left(){return v&&v.time_end?Math.max(0,Math.round((new Date(v.time_end)-Date.now())/1000)):0}
+function tick(){const t=$('t');if(t)t.textContent='⏱ '+left()+'s'}
+function manual(){return`<h2>📖 Handbuch</h2><div class="card"><b>Kabel</b>:<br>1. Mehr als ein rotes: das letzte rote schneiden.<br>2. Kein rotes und letztes gelb: das erste schneiden.<br>3. Genau ein blaues: das blaue schneiden.<br>4. Sonst: das letzte schneiden.</div><div class="card"><b>Zahlen</b>: Rest der Zahl durch 3 = Knopf (0 = Knopf 1, 1 = Knopf 2, 2 = Knopf 3). Zahl größer als 50: einen Knopf weiter.</div><div class="card"><b>Schalter</b>: LEDs gespiegelt lesen (LED 1 = Schalter 4 usw.), an = AN, aus = AUS, dann bestätigen.</div>`}
+function bomb(){const m=v.module||{},r=v.role;let h='';
+ if(r=='silent')return manual()+`<div class="mut">Aktiv: ${({wire:'Kabel',num:'Zahlen',sw:'Schalter'})[m.type]||''}</div>`;
+ if(m.type=='wire'){h+='<h2>Kabelmodul</h2>';const n=r=='deaf'?m.wires.length:m.n,cut=m.cut||[];for(let i=0;i<n;i++){if(cut.includes(i)){h+=`<div class="mut">Kabel ${i+1} (durchtrennt)</div>`;continue}
+  if(r=='deaf')h+=`<div class="wire" style="background:${C[m.wires[i]]}"></div><div class="mut">Kabel ${i+1}: ${m.wires[i]}</div>`;else h+=`<div class="wire" style="background:#888"></div><button onclick="act('cut',${i})">✂️ Kabel ${i+1}</button>`}}
+ if(m.type=='num'){h+='<h2>Zahlenmodul</h2>';if(r=='deaf')h+=`<div class="big">${m.N}</div>`;else h+='<div class="big">▒▒</div><div class="row">'+[0,1,2,3].map(i=>`<button onclick="act('pick',${i})">Knopf ${i+1}</button>`).join('')+'</div>'}
+ if(m.type=='sw'){h+='<h2>Schaltermodul</h2>';if(r=='deaf')h+=m.p.map(x=>`<span class="led" style="background:${x?'#f5c400':'transparent'}"></span>`).join('');else h+='<div class="row">'+m.sw.map((x,i)=>`<button class="${x?'':'s'}" onclick="act('toggle',${i})">Schalter ${i+1}: ${x?'AN':'AUS'}</button>`).join('')+'</div><div class="row"><button onclick="act(\'confirm\',0)">✔ Bestätigen</button></div>'}
+ return h}
+function draw(){const a=$('a');
+ if(!code||!v){a.innerHTML=`<h1>🍌 Banana Panic Online</h1><div class="card"><input id="n" placeholder="Dein Name" style="text-transform:none" maxlength="20"><button onclick="mk()">Neuen Raum erstellen</button><hr><input id="c" placeholder="Raumcode" maxlength="5"><button class="s" onclick="jn()">Raum beitreten</button></div><div class="mut">${err}</div>`;return}
+ const pl=(v.players||[]).map(p=>`${E[p.role]} ${p.name}`).join(', ');
+ let h=`<div class="card hud"><span>Raum ${code}</span><span>${E[v.role]} ${N[v.role]}</span><button class="s" onclick="leave()">Verlassen</button></div><div class="mut">Spieler (${(v.players||[]).length}/3): ${pl}</div>`;
+ if(v.state=='lobby'||v.state=='won'||v.state=='lost'){h+=`<div class="card"><h2>${v.state=='won'?'🎉 Entschärft!':v.state=='lost'?'💥 BUMM!':'Lobby'}</h2><div class="mut">Schick den Code <b>${code}</b> an deine Freunde. Es braucht genau 3 Spieler.</div><button onclick="start()" ${(v.players||[]).length<3?'disabled':''}>▶ Spiel starten</button></div>`}
+ else{h+=`<div class="card hud"><span id="t">⏱ ${left()}s</span><span>💥 ${v.errors}/3</span></div><div class="card">${bomb()}</div><div class="card"><div class="row">${['👍 Ja','👎 Nein','✋ Stopp','⏩ Schnell!','❓ Welches?'].map(x=>`<button class="s" onclick="say('${x}')">${x}</button>`).join('')}</div><div class="mut">${(v.msgs||[]).join('<br>')}</div></div>`}
+ a.innerHTML=h+`<div class="mut">${err}</div>`}
+boot();
+</script></body></html>
